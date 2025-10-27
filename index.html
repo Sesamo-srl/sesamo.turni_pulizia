@@ -204,145 +204,174 @@
     </div>
 
     <script>
-      const NAMES = [
-        "Androcolo",
-        "Andromario",
-        "Dario",
-        "Giulio",
-        "Lollone",
-        "Lucrazy",
-        "Marco",
-      ];
+  const NAMES = [
+    "Androcolo",
+    "Andromario",
+    "Dario",
+    "Giulio",
+    "Lollone",
+    "Lucrazy",
+    "Marco",
+  ];
 
-      const drawBtn = document.getElementById("drawBtn");
-      const result = document.getElementById("result");
-      const overlay = document.getElementById("overlay");
-      const winnerNameEl = document.getElementById("winnerName");
+  const drawBtn = document.getElementById("drawBtn");
+  const result = document.getElementById("result");
+  const overlay = document.getElementById("overlay");
+  const winnerNameEl = document.getElementById("winnerName");
 
-      let isDrawing = false;
-      let lastWinner = null; // esclude l'ultimo
+  let isDrawing = false;
+  let lastWinners = []; // memorizza gli ultimi 2
 
-      function draw() {
-        if (isDrawing) return;
-        isDrawing = true;
-        drawBtn.disabled = true;
-        drawBtn.setAttribute("aria-busy", "true");
+  // Fisher–Yates shuffle
+  function shuffle(array) {
+    let m = array.length,
+      t,
+      i;
+    while (m) {
+      i = Math.floor(Math.random() * m--);
+      t = array[m];
+      array[m] = array[i];
+      array[i] = t;
+    }
+    return array;
+  }
 
-        let picked;
-        do {
-          const index = Math.floor(Math.random() * NAMES.length);
-          picked = NAMES[index];
-        } while (picked === lastWinner && NAMES.length > 1);
+  function draw() {
+    if (isDrawing) return;
+    isDrawing = true;
+    drawBtn.disabled = true;
+    drawBtn.setAttribute("aria-busy", "true");
 
-        lastWinner = picked;
+    const shuffled = shuffle([...NAMES]);
 
-        result.innerHTML = `Oggi pulisce:&nbsp<strong>${picked}</strong>&nbsp🧹`;
-        showOverlay(picked);
-        confettiBurst();
+
+    const eligible = shuffled.filter((n) => !lastWinners.includes(n));
+    let picked = eligible.length > 0 ? eligible[0] : shuffled[0];
+
+
+    let tempCount = 0;
+    const interval = setInterval(() => {
+      const randomName = NAMES[Math.floor(Math.random() * NAMES.length)];
+      result.innerHTML = `Estrazione in corso... <strong>${randomName}</strong> 🤔`;
+      tempCount++;
+      if (tempCount > 12) {
+        clearInterval(interval);
+        finalize(picked);
+      }
+    }, 90);
+  }
+
+  function finalize(picked) {
+    lastWinners.unshift(picked);
+    if (lastWinners.length > 2) lastWinners.pop();
+
+    result.innerHTML = `Oggi pulisce:&nbsp<strong>${picked}</strong>&nbsp🧹`;
+    showOverlay(picked);
+    confettiBurst();
+  }
+
+  function showOverlay(name) {
+    winnerNameEl.textContent = name;
+    overlay.classList.add("show");
+
+    const close = () => {
+      overlay.classList.remove("show");
+      overlay.removeEventListener("click", close);
+      document.removeEventListener("keydown", onKey);
+      isDrawing = false;
+      drawBtn.disabled = false;
+      drawBtn.setAttribute("aria-busy", "false");
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape" || e.key === "Esc") close();
+    };
+
+    overlay.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+  }
+
+  // Confetti (uguale all’originale)
+  function confettiBurst() {
+    const canvas = document.createElement("canvas");
+    canvas.style.position = "fixed";
+    canvas.style.inset = "0";
+    canvas.style.pointerEvents = "none";
+    canvas.style.zIndex = "1000";
+    document.body.appendChild(canvas);
+
+    const ctx = canvas.getContext("2d");
+    let w, h, particles, last;
+    const TAU = Math.PI * 2;
+    const colors = ["#ff7a00", "#ffc14d", "#ffffff", "#ffd591", "#ff9f40"];
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize, { once: true });
+
+    const count = Math.min(180, Math.floor((w * h) / 9000));
+    particles = [...Array(count)].map(() => {
+      const angle = Math.random() * TAU;
+      const speed = 6 + Math.random() * 6;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed - 4;
+      return {
+        x: w / 2,
+        y: h * 0.3,
+        vx,
+        vy,
+        g: 0.18 + Math.random() * 0.15,
+        size: 3 + Math.random() * 5,
+        rot: Math.random() * TAU,
+        vr: (Math.random() - 0.5) * 0.2,
+        life: 1100 + Math.random() * 800,
+        color: colors[(Math.random() * colors.length) | 0],
+        shape: Math.random() < 0.6 ? "rect" : "circle",
+      };
+    });
+
+    last = performance.now();
+    function frame(now) {
+      const dt = now - last;
+      last = now;
+      ctx.clearRect(0, 0, w, h);
+
+      let alive = 0;
+      for (const p of particles) {
+        p.vy += p.g;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        p.life -= dt;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        if (p.shape === "rect") {
+          ctx.fillRect(-p.size, -p.size / 2, p.size * 2, p.size);
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        if (p.life > 0 && p.y < h + 40) alive++;
       }
 
-      function showOverlay(name) {
-        winnerNameEl.textContent = name;
-        overlay.classList.add("show");
-
-        const close = () => {
-          overlay.classList.remove("show");
-          overlay.removeEventListener("click", close);
-          document.removeEventListener("keydown", onKey);
-          isDrawing = false;
-          drawBtn.disabled = false;
-          drawBtn.setAttribute("aria-busy", "false");
-        };
-        const onKey = (e) => {
-          if (e.key === "Escape" || e.key === "Esc") close();
-        };
-
-        overlay.addEventListener("click", close);
-        document.addEventListener("keydown", onKey);
-      }
-
-      function confettiBurst() {
-        const canvas = document.createElement("canvas");
-        canvas.style.position = "fixed";
-        canvas.style.inset = "0";
-        canvas.style.pointerEvents = "none";
-        canvas.style.zIndex = "1000";
-        document.body.appendChild(canvas);
-
-        const ctx = canvas.getContext("2d");
-        let w, h, particles, last;
-        const TAU = Math.PI * 2;
-
-        const colors = ["#ff7a00", "#ffc14d", "#ffffff", "#ffd591", "#ff9f40"];
-
-        function resize() {
-          w = canvas.width = window.innerWidth;
-          h = canvas.height = window.innerHeight;
-        }
-        resize();
-        window.addEventListener("resize", resize, { once: true });
-
-        const count = Math.min(180, Math.floor((w * h) / 9000));
-        particles = [...Array(count)].map(() => {
-          const angle = Math.random() * TAU;
-          const speed = 6 + Math.random() * 6;
-          const vx = Math.cos(angle) * speed;
-          const vy = Math.sin(angle) * speed - 4;
-          return {
-            x: w / 2,
-            y: h * 0.3,
-            vx,
-            vy,
-            g: 0.18 + Math.random() * 0.15,
-            size: 3 + Math.random() * 5,
-            rot: Math.random() * TAU,
-            vr: (Math.random() - 0.5) * 0.2,
-            life: 1100 + Math.random() * 800,
-            color: colors[(Math.random() * colors.length) | 0],
-            shape: Math.random() < 0.6 ? "rect" : "circle",
-          };
-        });
-
-        last = performance.now();
-        function frame(now) {
-          const dt = now - last;
-          last = now;
-          ctx.clearRect(0, 0, w, h);
-
-          let alive = 0;
-          for (const p of particles) {
-            p.vy += p.g;
-            p.x += p.vx;
-            p.y += p.vy;
-            p.rot += p.vr;
-            p.life -= dt;
-
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.rot);
-            ctx.fillStyle = p.color;
-            if (p.shape === "rect") {
-              ctx.fillRect(-p.size, -p.size / 2, p.size * 2, p.size);
-            } else {
-              ctx.beginPath();
-              ctx.arc(0, 0, p.size, 0, TAU);
-              ctx.fill();
-            }
-            ctx.restore();
-
-            if (p.life > 0 && p.y < h + 40) alive++;
-          }
-
-          if (alive > 0) {
-            requestAnimationFrame(frame);
-          } else {
-            canvas.remove();
-          }
-        }
+      if (alive > 0) {
         requestAnimationFrame(frame);
+      } else {
+        canvas.remove();
       }
+    }
+    requestAnimationFrame(frame);
+  }
 
-      drawBtn.addEventListener("click", draw);
-    </script>
+  drawBtn.addEventListener("click", draw);
+</script>
   </body>
 </html>
